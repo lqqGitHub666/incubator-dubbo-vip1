@@ -13,6 +13,10 @@
     <packaging>pom</packaging>
     <modules>
         <module>demo</module>
+        <module>dubbo-util</module>
+        <module>loadbalance-vip</module>
+        <module>spi</module>
+        <module>spring</module>
     </modules>
 
     <dependencyManagement>

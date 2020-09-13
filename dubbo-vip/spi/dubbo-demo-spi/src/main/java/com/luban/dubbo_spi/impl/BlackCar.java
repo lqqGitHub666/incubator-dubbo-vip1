@@ -15,6 +15,7 @@ import org.apache.dubbo.common.URL;
 @Extension("bbb")
 public class BlackCar implements Car {
 
+    @Override
     public void getColor() {
         System.out.println("black");
     }
