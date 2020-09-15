@@ -74,6 +74,9 @@ public class ExtensionLoader<T> {
     private static final ConcurrentMap<Class<?>, ExtensionLoader<?>> EXTENSION_LOADERS = new ConcurrentHashMap<Class<?>, ExtensionLoader<?>>();
 
     // 实现类对应的实例
+    /**
+     * 扩展实例存入内存中缓存起来； key=扩展类 ； value=扩展类实例
+     */
     private static final ConcurrentMap<Class<?>, Object> EXTENSION_INSTANCES = new ConcurrentHashMap<Class<?>, Object>();
 
     // ==============================
@@ -83,11 +86,16 @@ public class ExtensionLoader<T> {
     private final ExtensionFactory objectFactory;
 
     private final ConcurrentMap<Class<?>, String> cachedNames = new ConcurrentHashMap<Class<?>, String>();
-
+    /**
+     * 扩展点Class缓存 key=扩展名 ，value=对应的class对象
+     */
     private final Holder<Map<String, Class<?>>> cachedClasses = new Holder<Map<String, Class<?>>>();
 
     private final Map<String, Object> cachedActivates = new ConcurrentHashMap<String, Object>();
-    // 缓存实例，每个接口的实现类对应一个实例
+    /**
+     * 扩展点实例缓存 key=扩展点名称，value=扩展实例的Holder实例
+     * 缓存实例，每个接口的实现类对应一个实例
+     */
     private final ConcurrentMap<String, Holder<Object>> cachedInstances = new ConcurrentHashMap<String, Holder<Object>>();
     private final Holder<Object> cachedAdaptiveInstance = new Holder<Object>();
     private volatile Class<?> cachedAdaptiveClass = null;
@@ -328,6 +336,10 @@ public class ExtensionLoader<T> {
     /**
      * Find the extension with the given name. If the specified name is not found, then {@link IllegalStateException}
      * will be thrown.
+     *  获取接口拓展类实例
+     *      * 1.检查缓存中是否存在
+     *      * 2.创建并返回拓展类实例
+     *      * @param name  需要获取的配置文件中拓展类的key
      * 每个接口对应一个ExtensionLoader，这个方法是根据名字找具体的实现类
      */
     @SuppressWarnings("unchecked")
@@ -336,19 +348,26 @@ public class ExtensionLoader<T> {
             throw new IllegalArgumentException("Extension name == null");
         }
         if ("true".equals(name)) {
+            // 获取默认的拓展实现类,即@SPI注解上的默认实现类, 如@SPI("benz")
             return getDefaultExtension();
         }
+        // Holder，顾名思义，用于持有目标对象，从缓存中拿，没有则创建
+        // 首先通过扩展名从扩展实例缓存中获取Holder对象
         Holder<Object> holder = cachedInstances.get(name);
         if (holder == null) {
+            //如果没有获取到就new一个空的Holder实例存入缓存
             cachedInstances.putIfAbsent(name, new Holder<Object>());
             holder = cachedInstances.get(name);
         }
         Object instance = holder.get();
+        // 双重检查
         if (instance == null) {
+            // 创建拓展实例
             synchronized (holder) {
                 instance = holder.get();
                 if (instance == null) {
                     instance = createExtension(name);
+                    // 设置实例到 holder 中
                     holder.set(instance);
                 }
             }
@@ -524,25 +543,46 @@ public class ExtensionLoader<T> {
     }
 
     @SuppressWarnings("unchecked")
+    /** 创建拓展类实例，包含如下步骤
+     * 1. 通过 getExtensionClasses 获取所有的拓展类，从配置文件加载获取拓展类的map映射
+     * 2. 通过反射创建拓展对象
+     * 3. 向拓展对象中注入依赖（IOC）
+     * 4. 将拓展对象包裹在相应的 Wrapper 对象中(AOP)
+     * 创建拓展类对象步骤分别为：
+     *
+     * 通过 getExtensionClasses 从配置文件中加载所有的拓展类，再通过名称获取目标拓展类
+     * 通过反射创建拓展对象
+     * 向拓展对象中注入依赖
+     * 将拓展对象包裹在相应的 Wrapper 对象中
+     * @param name 需要获取的配置文件中拓展类的key
+     * @return 拓展类实例
+     */
     private T createExtension(String name) {
+        // 从配置文件中加载所有的拓展类，可得到“配置项名称”到“配置类”的map，再根据拓展项名称从map中取出相应的拓展类即可
         Class<?> clazz = getExtensionClasses().get(name); // 取出对应的实现类
         if (clazz == null) {
             throw findException(name);
         }
         try {
             // 生成实例并缓存
+            //从扩展点缓存中获取对应实例对象
             T instance = (T) EXTENSION_INSTANCES.get(clazz);
             if (instance == null) {
+                // //如果缓存中不存在此类的扩展点，就通过反射创建实例,并存入缓存
                 EXTENSION_INSTANCES.putIfAbsent(clazz, clazz.newInstance());
                 instance = (T) EXTENSION_INSTANCES.get(clazz);
             }
+            // 向实例中注入依赖,通过setter方法自动注入对应的属性实例
             injectExtension(instance);
+            //从缓存中取出所有的包装类，形成包装链
             Set<Class<?>> wrapperClasses = cachedWrapperClasses;
             if (CollectionUtils.isNotEmpty(wrapperClasses)) {
+                // 循环创建 Wrapper 实例,形成Wrapper包装链
                 for (Class<?> wrapperClass : wrapperClasses) {
                     instance = injectExtension((T) wrapperClass.getConstructor(type).newInstance(instance));
                 }
             }
+            //初始化实例并返回
             return instance;
         } catch (Throwable t) {
             throw new IllegalStateException("Extension instance(name: " + name + ", class: " +
@@ -600,11 +640,14 @@ public class ExtensionLoader<T> {
 
     // 从所有文件里获取所有type接口的所有实现类并缓存
     private Map<String, Class<?>> getExtensionClasses() {
+        // 从缓存中获取已加载的拓展点class
         Map<String, Class<?>> classes = cachedClasses.get();
+        //双重检查
         if (classes == null) {
             synchronized (cachedClasses) {
                 classes = cachedClasses.get();
                 if (classes == null) {
+                    // 加载拓展类
                     classes = loadExtensionClasses();
                     cachedClasses.set(classes);
                 }
