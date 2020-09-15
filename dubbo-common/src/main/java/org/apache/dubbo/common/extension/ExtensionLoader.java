@@ -690,10 +690,19 @@ public class ExtensionLoader<T> {
         return extensionClasses;
     }
 
+    /**
+     * 加载配置文件内容
+     * @param extensionClasses 拓展类map
+     * @param dir 文件夹路径
+     * @param type 接口名称
+     * @param extensionLoaderClassLoaderFirst 是否先加载ExtensionLoader的ClassLoader
+     */
     private void loadDirectory(Map<String, Class<?>> extensionClasses, String dir, String type) {
+        // fileName = 文件夹路径 + type 全限定名
         String fileName = dir + type;
         try {
             Enumeration<java.net.URL> urls;
+            //获取当前线程的类加载器
             ClassLoader classLoader = findClassLoader();
             if (classLoader != null) {
                 urls = classLoader.getResources(fileName);
