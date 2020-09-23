@@ -501,6 +501,7 @@ public class ExtensionLoader<T> {
                     instance = cachedAdaptiveInstance.get();
                     if (instance == null) {
                         try {
+                            //自适用  ，代理类（实现了接口）//可以从url里面取值
                             instance = createAdaptiveExtension();
                             cachedAdaptiveInstance.set(instance);
                         } catch (Throwable t) {
@@ -559,7 +560,8 @@ public class ExtensionLoader<T> {
      */
     private T createExtension(String name) {
         // 从配置文件中加载所有的拓展类，可得到“配置项名称”到“配置类”的map，再根据拓展项名称从map中取出相应的拓展类即可
-        Class<?> clazz = getExtensionClasses().get(name); // 取出对应的实现类
+        // 取出对应的实现类
+        Class<?> clazz = getExtensionClasses().get(name);
         if (clazz == null) {
             throw findException(name);
         }
@@ -608,9 +610,11 @@ public class ExtensionLoader<T> {
                             continue;
                         }
                         try {
-                            String property = method.getName().length() > 3 ? method.getName().substring(3, 4).toLowerCase() + method.getName().substring(4) : "";
+                            String property = method.getName().length() > 3 ? method.getName().substring(3, 4).toLowerCase()
+                                    + method.getName().substring(4) : "";
                             // 如果在spring容器中已经存在了一个对象就会直接去容器中的对象
-                            // 如果没有，则会使用SpiExtensionFactory来获取对象，这个时候，property没有使用到，会直接根据pt来生成Adaptive类并且构造实例，也就是dubbo的代理对象
+                            // 如果没有，则会使用SpiExtensionFactory来获取对象，这个时候，property没有使用到，
+                            // 会直接根据pt来生成Adaptive类并且构造实例，也就是dubbo的代理对象
                             Object object = objectFactory.getExtension(pt, property);
                             if (object != null) {
                                 method.invoke(instance, object); // set方法
@@ -695,7 +699,7 @@ public class ExtensionLoader<T> {
      * @param extensionClasses 拓展类map
      * @param dir 文件夹路径
      * @param type 接口名称
-     * @param extensionLoaderClassLoaderFirst 是否先加载ExtensionLoader的ClassLoader
+     * extensionLoaderClassLoaderFirst 是否先加载ExtensionLoader的ClassLoader
      */
     private void loadDirectory(Map<String, Class<?>> extensionClasses, String dir, String type) {
         // fileName = 文件夹路径 + type 全限定名
@@ -867,6 +871,7 @@ public class ExtensionLoader<T> {
         if (cachedAdaptiveClass != null) {
             return cachedAdaptiveClass;
         }
+        //默认创建代理类
         return cachedAdaptiveClass = createAdaptiveExtensionClass();
     }
 

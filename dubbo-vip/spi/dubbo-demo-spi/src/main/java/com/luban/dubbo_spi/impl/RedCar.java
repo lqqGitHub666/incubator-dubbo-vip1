@@ -13,6 +13,7 @@ import org.apache.dubbo.common.URL;
  */
 public class RedCar implements Car {
 
+    @Override
     public void getColor() {
         System.out.println("red");
     }
